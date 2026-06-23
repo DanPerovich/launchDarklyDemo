@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupportIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+    <div class="header-inner">
+        <div class="logo">SupportIQ</div>
+        <div class="header-controls">
+            <span class="control-label">Demo user:</span>
+            <div class="avatar-chips" id="avatar-chips">
+                {% for key, user in users.items() %}
+                <button class="avatar-chip {% if loop.first %}active{% endif %}" data-user="{{ key }}">
+                    <span class="chip-avatar">{{ key[0] | upper }}</span>
+                    <span>{{ key | capitalize }}</span>
+                </button>
+                {% endfor %}
+            </div>
+            <div class="flag-badge" id="flag-badge">
+                <span class="badge-dot" id="badge-dot"></span>
+                <span id="badge-text">Connecting...</span>
+            </div>
+            <button class="btn-seed" id="btn-seed" onclick="seedExperimentData()">
+                Seed experiment data
+            </button>
+            <button class="btn-remediate" id="btn-remediate" onclick="showTrigger()">
+                Simulate incident
+            </button>
+        </div>
+    </div>
+</header>
+
+<div class="context-strip">
+    <span class="ctx-label">Targeting context</span>
+    <span id="context-strip-attrs"></span>
+</div>
+
+<main>
+    <aside class="ticket-list">
+        <div class="list-header">Open tickets</div>
+        <ul id="ticket-ul">
+            {% for ticket in tickets %}
+            <li class="ticket-item"
+                data-id="{{ ticket.id }}"
+                data-body="{{ ticket.body }}"
+                data-subject="{{ ticket.subject }}"
+                data-customer="{{ ticket.customer }}"
+                data-account="{{ ticket.account }}"
+                data-priority="{{ ticket.priority }}">
+                <div class="ticket-id">{{ ticket.id }}</div>
+                <div class="ticket-subject">{{ ticket.subject }}</div>
+                <div class="ticket-meta">
+                    {{ ticket.customer }}
+                    <span class="priority priority-{{ ticket.priority | lower }}">{{ ticket.priority }}</span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </aside>
+
+    <section class="ticket-detail" id="ticket-detail">
+        <div class="empty-state">
+            <div class="empty-icon">&#128179;</div>
+            <p>Select a ticket to view</p>
+        </div>
+    </section>
+</main>
+
+<!-- Trigger modal -->
+<div class="modal-overlay hidden" id="trigger-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Remediate: kill the AI feature</span>
+            <button class="modal-close" onclick="hideTrigger()">&#x2715;</button>
+        </div>
+        <p class="modal-desc">
+            In a real incident, your alerting system (PagerDuty, Datadog, etc.) fires this
+            automatically. The on-call engineer never logs into LaunchDarkly — one HTTP call
+            kills the feature instantly.
+        </p>
+        <div class="code-block-wrap">
+            <button type="button" class="copy-btn" id="btn-copy-curl" onclick="copyCurlCommand()" disabled aria-label="Copy curl command to clipboard">Copy</button>
+            <div class="code-block" id="curl-display">Loading...</div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideTrigger()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- LaunchDarkly JS client SDK + Observability + Session Replay (CDN — dev/demo only) -->
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/launchdarkly-js-client-sdk@3.9.3/dist/ldclient.min.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@launchdarkly/observability@1.1.15/dist/index.umd.js"></script>
+<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@launchdarkly/session-replay@1.1.15/dist/index.umd.js"></script>
+
+<script>
+window.FLAG_POLL_INTERVAL_MS = {{ flag_poll_interval_ms }};
+window.DEMO_USERS = {{ users | tojson }};
+window.LD_CLIENT_ID = {{ ld_client_id | tojson }};
+
+// Initialize the LD JS client with Session Replay and Observability plugins.
+// The client is stored as window.ldObsClient so main.js can call identify()
+// when the demo user switches.
+function initLDObservability(userKey) {
+    var user = window.DEMO_USERS && window.DEMO_USERS[userKey || 'alice'];
+    var context = user
+        ? { kind: 'user', key: user.key, name: user.display,
+            plan_tier: user.plan_tier, beta_tester: user.beta_tester }
+        : { kind: 'user', key: 'anonymous' };
+
+    window.ldObsClient = LDClient.initialize(window.LD_CLIENT_ID, context, {
+        plugins: [
+            new Observability.default({ networkRecording: { enabled: true, recordHeadersAndBody: true } }),
+            new SessionReplay.default({ privacySetting: 'strict' }),
+        ],
+    });
+}
+
+if (window.LD_CLIENT_ID) {
+    initLDObservability('alice');
+}
+
+async function seedExperimentData() {
+    const btn = document.getElementById("btn-seed");
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Seeding…";
+    try {
+        const res = await fetch("/api/simulate-traffic", { method: "POST" });
+        const data = await res.json();
+        btn.textContent = `Seeded (${data.reply_sent_events} reply + ${data.suggestion_accepted_events} accept)`;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 4000);
+    } catch {
+        btn.textContent = "Error — check console";
+        btn.disabled = false;
+    }
+}
+</script>
+<script src="/static/main.js"></script>
+</body>
+</html>
