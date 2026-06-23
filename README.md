@@ -49,8 +49,8 @@ supportiq/
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/supportiq-ld-demo.git
-cd supportiq-ld-demo
+git clone https://github.com/DanPerovich/launchDarklyDemo.git
+cd launchDarklyDemo
 
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
